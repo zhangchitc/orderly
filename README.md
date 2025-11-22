@@ -1,6 +1,6 @@
 # Orderly Network Scripts
 
-A collection of JavaScript scripts for interacting with the Orderly Network API, including account registration and account checking functionality.
+A collection of JavaScript scripts for interacting with the Orderly Network API, including account registration, account checking, and Orderly Key management functionality.
 
 ## Installation
 
@@ -18,8 +18,9 @@ ORDERLY_API_URL=https://api.orderly.org  # or https://testnet-api.orderly.org fo
 CHAIN_ID=80001                            # Example: Polygon Mumbai testnet
 BROKER_ID=woofi_pro                       # Your broker ID
 
-# Wallet Configuration (required for registration)
+# Wallet Configuration (required for registration and key operations)
 PRIVATE_KEY=your_private_key_here         # Your Ethereum wallet private key
+ORDERLY_KEY=ed25519:...                   # Orderly public key (for adding keys)
 ```
 
 ### Environment Variables
@@ -27,9 +28,10 @@ PRIVATE_KEY=your_private_key_here         # Your Ethereum wallet private key
 - `ORDERLY_API_URL`: Orderly API base URL (default: `https://api.orderly.org`)
 - `CHAIN_ID`: The chain ID to use (default: `80001` for Polygon Mumbai testnet)
 - `BROKER_ID`: Your broker ID (default: `woofi_pro`)
-- `PRIVATE_KEY`: Your Ethereum wallet private key (required for registration)
+- `PRIVATE_KEY`: Your Ethereum wallet private key (required for registration and adding keys)
 - `ADDRESS`: Wallet address (optional, can be passed as CLI argument)
 - `CHAIN_TYPE`: Chain type - `EVM` or `SOL` (default: `EVM`)
+- `ORDERLY_KEY`: Orderly public key to announce (required for adding keys)
 
 ## Scripts
 
@@ -187,6 +189,100 @@ Registration successful!
 
 ---
 
+### 3. Add Orderly Key (`add-orderly-key.js`)
+
+Add/announce an Orderly Key for an account. This allows the account to use Orderly Key-based authentication.
+
+#### Usage
+
+```bash
+# Using npm script
+npm run add-key <orderlyKey> [brokerId] [chainId]
+
+# Direct execution
+node add-orderly-key.js <orderlyKey> [brokerId] [chainId]
+```
+
+#### Prerequisites
+
+- `PRIVATE_KEY` must be set in `.env` file
+- `ORDERLY_KEY` must be provided (Orderly public key to announce)
+- Account must be registered on Orderly Network
+
+#### Examples
+
+```bash
+# Add Orderly Key with all parameters
+npm run add-key "ed25519:..." "woofi_pro" 80001
+
+# Add Orderly Key using environment variable
+ORDERLY_KEY=ed25519:... npm run add-key
+
+# Add Orderly Key with inline environment variables
+PRIVATE_KEY=0x... ORDERLY_KEY=ed25519:... npm run add-key
+```
+
+#### Using as a Module
+
+```javascript
+const { addOrderlyKey } = require("./add-orderly-key");
+const { ethers } = require("ethers");
+
+// Create wallet from private key
+const wallet = new ethers.Wallet("your_private_key");
+
+// Add Orderly Key
+const result = await addOrderlyKey(
+  wallet, // ethers.Wallet instance
+  "ed25519:...", // Orderly public key
+  "woofi_pro", // broker ID (optional, defaults to BROKER_ID from env)
+  80001 // chain ID (optional, defaults to CHAIN_ID from env)
+);
+
+console.log("Orderly Key added:", result);
+```
+
+#### How It Works
+
+1. Creates an EIP-712 typed data message with:
+   - Broker ID
+   - Chain ID
+   - Timestamp
+   - Orderly Key (public key)
+2. Signs the message using EIP-712 standard
+3. Sends the announcement request to Orderly API with the signature
+
+#### Example Output
+
+```
+Adding Orderly Key for address: 0x1234... with brokerId: woori_pro
+Orderly Key: ed25519:...
+Signing EIP-712 message...
+Signature: 0xabcd...
+Announcing Orderly Key...
+Orderly Key announcement successful!
+```
+
+#### API Details
+
+- **Announce Key Endpoint**: `/v1/user_announce_key`
+- **Method**: POST
+- **Request Body**:
+  ```json
+  {
+    "message": {
+      "brokerId": "string",
+      "chainId": 80001,
+      "timestamp": 1234567890,
+      "orderlyKey": "ed25519:..."
+    },
+    "signature": "0x...",
+    "userAddress": "0x..."
+  }
+  ```
+
+---
+
 ## Supported Chains
 
 Based on the Orderly documentation, you can register on any EVM-compatible chain that Orderly supports. Common options include:
@@ -226,6 +322,7 @@ All scripts handle common errors:
 orderly/
 ├── check-account.js      # Check account existence script
 ├── register-account.js   # Register account script
+├── add-orderly-key.js    # Add/announce Orderly Key script
 ├── package.json          # Dependencies and scripts
 ├── .env                  # Environment variables (not in git)
 ├── .env.example          # Example environment variables

@@ -5,12 +5,15 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "register": "node register-account.js",
-    "check": "node check-account.js"
+    "check": "node check-account.js",
+    "add-key": "node add-orderly-key.js"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@noble/ed25519": "^1.7.3",
+    "bs58": "^5.0.0",
     "dotenv": "^16.3.1",
     "ethers": "^6.9.0",
     "node-fetch": "^2.7.0"
