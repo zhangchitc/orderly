@@ -1,6 +1,6 @@
 # Orderly Network Scripts
 
-A collection of JavaScript scripts for interacting with the Orderly Network API, including account registration, account checking, and Orderly Key management functionality.
+A collection of JavaScript scripts for interacting with the Orderly Network API, including account registration, account checking, Orderly Key management, and deposit functionality.
 
 ## Installation
 
@@ -18,9 +18,13 @@ ORDERLY_API_URL=https://api.orderly.org  # or https://testnet-api.orderly.org fo
 CHAIN_ID=80001                            # Example: Polygon Mumbai testnet
 BROKER_ID=woofi_pro                       # Your broker ID
 
-# Wallet Configuration (required for registration and key operations)
+# Wallet Configuration (required for registration, key operations, and deposits)
 PRIVATE_KEY=your_private_key_here         # Your Ethereum wallet private key
-ORDERLY_KEY=ed25519:...                   # Orderly public key (for adding keys)
+
+# Deposit Configuration (optional)
+RPC_URL=https://rpc.ankr.com/eth_sepolia  # RPC URL for on-chain operations
+ORDERLY_VAULT=0x...                       # Override Vault address (auto-detected by chain ID)
+DEPOSIT_AMOUNT=100                        # Deposit amount for deposit script
 ```
 
 ### Environment Variables
@@ -28,10 +32,9 @@ ORDERLY_KEY=ed25519:...                   # Orderly public key (for adding keys)
 - `ORDERLY_API_URL`: Orderly API base URL (default: `https://api.orderly.org`)
 - `CHAIN_ID`: The chain ID to use (default: `80001` for Polygon Mumbai testnet)
 - `BROKER_ID`: Your broker ID (default: `woofi_pro`)
-- `PRIVATE_KEY`: Your Ethereum wallet private key (required for registration and adding keys)
+- `PRIVATE_KEY`: Your Ethereum wallet private key (required for registration, adding keys, and deposits)
 - `ADDRESS`: Wallet address (optional, can be passed as CLI argument)
 - `CHAIN_TYPE`: Chain type - `EVM` or `SOL` (default: `EVM`)
-- `ORDERLY_KEY`: Orderly public key to announce (required for adding keys)
 
 ## Scripts
 
@@ -197,29 +200,29 @@ Add/announce an Orderly Key for an account. This allows the account to use Order
 
 ```bash
 # Using npm script
-npm run add-key <orderlyKey> [brokerId] [chainId]
+npm run add-key [brokerId] [chainId]
 
 # Direct execution
-node add-orderly-key.js <orderlyKey> [brokerId] [chainId]
+node add-orderly-key.js [brokerId] [chainId]
 ```
 
 #### Prerequisites
 
 - `PRIVATE_KEY` must be set in `.env` file
-- `ORDERLY_KEY` must be provided (Orderly public key to announce)
 - Account must be registered on Orderly Network
+- Note: Orderly Key is automatically generated internally (ed25519 key pair)
 
 #### Examples
 
 ```bash
 # Add Orderly Key with all parameters
-npm run add-key "ed25519:..." "woofi_pro" 80001
+npm run add-key "woofi_pro" 80001
 
-# Add Orderly Key using environment variable
-ORDERLY_KEY=ed25519:... npm run add-key
+# Add Orderly Key using default broker ID and chain ID
+npm run add-key
 
 # Add Orderly Key with inline environment variables
-PRIVATE_KEY=0x... ORDERLY_KEY=ed25519:... npm run add-key
+PRIVATE_KEY=0x... npm run add-key
 ```
 
 #### Using as a Module
@@ -231,26 +234,30 @@ const { ethers } = require("ethers");
 // Create wallet from private key
 const wallet = new ethers.Wallet("your_private_key");
 
-// Add Orderly Key
+// Add Orderly Key (key is generated automatically)
 const result = await addOrderlyKey(
   wallet, // ethers.Wallet instance
-  "ed25519:...", // Orderly public key
   "woofi_pro", // broker ID (optional, defaults to BROKER_ID from env)
   80001 // chain ID (optional, defaults to CHAIN_ID from env)
 );
 
 console.log("Orderly Key added:", result);
+console.log("Generated Orderly Key:", result.orderlyKey);
 ```
 
 #### How It Works
 
-1. Creates an EIP-712 typed data message with:
+1. Generates an ed25519 key pair internally
+2. Encodes the public key in base58 format with "ed25519:" prefix
+3. Creates an EIP-712 typed data message with:
    - Broker ID
    - Chain ID
+   - Orderly Key (generated public key)
+   - Scope (default: "read,trading")
    - Timestamp
-   - Orderly Key (public key)
-2. Signs the message using EIP-712 standard
-3. Sends the announcement request to Orderly API with the signature
+   - Expiration (default: 365 days)
+4. Signs the message using EIP-712 standard
+5. Sends the add key request to Orderly API with the signature
 
 #### Example Output
 
@@ -265,7 +272,7 @@ Orderly Key announcement successful!
 
 #### API Details
 
-- **Announce Key Endpoint**: `/v1/user_announce_key`
+- **Add Key Endpoint**: `/v1/orderly_key`
 - **Method**: POST
 - **Request Body**:
   ```json
@@ -283,16 +290,144 @@ Orderly Key announcement successful!
 
 ---
 
+### 4. Deposit USDC (`deposit.js`)
+
+Deposit USDC tokens to your Orderly account via the Vault smart contract on supported chains.
+
+#### Usage
+
+```bash
+# Using npm script
+npm run deposit <amount> [brokerId] [chainId]
+
+# Direct execution
+node deposit.js <amount> [brokerId] [chainId]
+
+# With environment variables
+DEPOSIT_AMOUNT=100 npm run deposit
+```
+
+#### Prerequisites
+
+- `PRIVATE_KEY` must be set in `.env` file
+- `RPC_URL` must be set in `.env` file for the chain you're using (or use default RPC URLs)
+- Account must be registered on Orderly Network
+- Sufficient USDC balance in your wallet
+- Sufficient native token (ETH, etc.) for gas fees and deposit fee
+
+#### Examples
+
+```bash
+# Deposit 100 USDC with all parameters
+npm run deposit "100" "woofi_pro" 421614
+
+# Deposit using environment variables
+DEPOSIT_AMOUNT=100 npm run deposit
+
+# Deposit on specific chain
+npm run deposit "50" "woofi_pro" 84532
+```
+
+#### Using as a Module
+
+```javascript
+const { depositUSDC } = require("./deposit");
+const { ethers } = require("ethers");
+
+// Create wallet from private key
+const wallet = new ethers.Wallet("your_private_key");
+
+// Deposit USDC
+const result = await depositUSDC(
+  wallet, // ethers.Wallet instance
+  "100", // amount in human-readable format
+  "woofi_pro", // broker ID (optional, defaults to BROKER_ID from env)
+  421614 // chain ID (optional, defaults to CHAIN_ID from env)
+);
+
+console.log("Deposit result:", result);
+```
+
+#### How It Works
+
+1. Fetches the Orderly Vault contract address for the specified chain
+2. Connects to the blockchain via RPC provider
+3. Checks USDC balance in your wallet
+4. Approves USDC spending by the Vault contract (if needed)
+5. Prepares deposit data with:
+   - Account ID (calculated from address and broker ID)
+   - Broker hash (keccak256 of broker ID)
+   - Token hash (keccak256 of "USDC")
+   - Token amount (in smallest unit)
+6. Calculates deposit fee using `getDepositFee`
+7. Calls the Vault `deposit` function with deposit data and fee
+
+#### Example Output
+
+```
+Depositing 100 USDC to Orderly account for address: 0x1234... with brokerId: woori_pro
+Orderly Vault: 0x0EaC556c0C2321BA25b9DC01e4e3c95aD5CDCd2f
+USDC decimals: 6
+Amount in smallest unit: 100000000
+Current USDC balance: 1000.0
+Approving USDC transfer to Orderly Vault...
+Approval confirmed
+Deposit data prepared:
+  Account ID: 0x...
+  Broker Hash: 0x...
+  Token Hash: 0x...
+  Token Amount: 100000000
+Calculating deposit fee...
+Deposit fee: 0.0001 ETH
+Depositing 100 USDC to Orderly Vault...
+Transaction hash: 0xabcd...
+Transaction confirmed in block: 12345678
+
+Deposit successful!
+Transaction Hash: 0xabcd...
+Vault Address: 0x0EaC556c0C2321BA25b9DC01e4e3c95aD5CDCd2f
+Amount: 100 USDC
+```
+
+#### Supported Chains
+
+The deposit script supports all chains listed in the Orderly documentation:
+
+- Ethereum (Mainnet & Sepolia)
+- Arbitrum (One & Sepolia)
+- Optimism (Mainnet & Sepolia)
+- Base (Mainnet & Sepolia)
+- Mantle (Mainnet & Sepolia)
+- BNB Smart Chain (Mainnet & Testnet)
+
+#### API Details
+
+- **Vault Addresses**: Automatically selected based on chain ID from [Orderly addresses documentation](https://orderly.network/docs/build-on-omnichain/addresses)
+- **Process**: On-chain transaction to Vault smart contract
+- **Documentation**: Based on [Orderly deposit flow](https://orderly.network/docs/build-on-omnichain/user-flows/withdrawal-deposit)
+
+---
+
 ## Supported Chains
 
 Based on the Orderly documentation, you can register on any EVM-compatible chain that Orderly supports. Common options include:
 
-| Chain                  | Chain ID   | Type    |
-| ---------------------- | ---------- | ------- |
-| Polygon Mumbai Testnet | `80001`    | Testnet |
-| Polygon Mainnet        | `137`      | Mainnet |
-| Ethereum Sepolia       | `11155111` | Testnet |
-| Ethereum Mainnet       | `1`        | Mainnet |
+| Chain                   | Chain ID   | Type    |
+| ----------------------- | ---------- | ------- |
+| Ethereum Mainnet        | `1`        | Mainnet |
+| Ethereum Sepolia        | `11155111` | Testnet |
+| Arbitrum One            | `42161`    | Mainnet |
+| Arbitrum Sepolia        | `421614`   | Testnet |
+| Optimism                | `10`       | Mainnet |
+| Optimism Sepolia        | `11155420` | Testnet |
+| Base                    | `8453`     | Mainnet |
+| Base Sepolia            | `84532`    | Testnet |
+| Mantle                  | `5000`     | Mainnet |
+| Mantle Sepolia          | `5003`     | Testnet |
+| BNB Smart Chain         | `56`       | Mainnet |
+| BNB Smart Chain Testnet | `97`       | Testnet |
+
+For a complete list of supported chains and contract addresses, see the [Orderly addresses documentation](https://orderly.network/docs/build-on-omnichain/addresses).
 
 ## Error Handling
 
@@ -323,6 +458,7 @@ orderly/
 ├── check-account.js      # Check account existence script
 ├── register-account.js   # Register account script
 ├── add-orderly-key.js    # Add/announce Orderly Key script
+├── deposit.js            # Deposit USDC to Orderly account script
 ├── package.json          # Dependencies and scripts
 ├── .env                  # Environment variables (not in git)
 ├── .env.example          # Example environment variables
@@ -350,6 +486,8 @@ To add a new script:
 ### Dependencies
 
 - `ethers`: Ethereum library for wallet operations and EIP-712 signing
+- `@noble/ed25519`: ed25519 cryptographic primitives for Orderly Key generation
+- `bs58`: Base58 encoding for Orderly Key encoding
 - `dotenv`: Load environment variables from `.env` file
 - `node-fetch`: HTTP client (fallback for Node.js < 18)
 

@@ -6,7 +6,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "register": "node register-account.js",
     "check": "node check-account.js",
-    "add-key": "node add-orderly-key.js"
+    "add-key": "node add-orderly-key.js",
+    "deposit": "node deposit.js"
   },
   "author": "",
   "license": "ISC",
