@@ -9,7 +9,10 @@
     "add-key": "node add-orderly-key.js",
     "remove-key": "node remove-orderly-key.js",
     "deposit": "node deposit.js",
-    "withdraw": "node withdraw.js"
+    "withdraw": "node withdraw.js",
+    "create-order": "node create-order.js",
+    "get-orders": "node get-orders.js",
+    "cancel-order": "node cancel-order.js"
   },
   "author": "",
   "license": "ISC",
