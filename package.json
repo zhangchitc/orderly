@@ -7,7 +7,9 @@
     "register": "node register-account.js",
     "check": "node check-account.js",
     "add-key": "node add-orderly-key.js",
-    "deposit": "node deposit.js"
+    "remove-key": "node remove-orderly-key.js",
+    "deposit": "node deposit.js",
+    "withdraw": "node withdraw.js"
   },
   "author": "",
   "license": "ISC",

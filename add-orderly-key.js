@@ -2,6 +2,8 @@ require("dotenv").config();
 const { ethers } = require("ethers");
 const { getPublicKey, utils } = require("@noble/ed25519");
 const bs58 = require("bs58");
+const fs = require("fs");
+const path = require("path");
 
 // Use webcrypto if available for @noble/ed25519
 if (typeof globalThis !== "undefined" && !globalThis.crypto) {
@@ -34,7 +36,7 @@ const VERIFYING_CONTRACT = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
  * Generate an ed25519 key pair and encode the public key
  * Based on Orderly documentation: https://orderly.network/docs/build-on-omnichain/user-flows/wallet-authentication
  *
- * @returns {Promise<string>} - Encoded Orderly public key (format: "ed25519:...")
+ * @returns {Promise<Object>} - Object with orderlyKey (public key) and privateKeyHex (private key in hex format)
  */
 async function generateOrderlyKey() {
   const privateKey = utils.randomPrivateKey();
@@ -42,7 +44,15 @@ async function generateOrderlyKey() {
   // Encode public key using base58 (as shown in Orderly documentation examples)
   // getPublicKey returns Uint8Array, bs58.encode accepts Uint8Array
   const encodedKey = bs58.encode(publicKey);
-  return `ed25519:${encodedKey}`;
+  const orderlyKey = `ed25519:${encodedKey}`;
+
+  // Convert private key to hex format for storage
+  const privateKeyHex = ethers.hexlify(privateKey);
+
+  return {
+    orderlyKey: orderlyKey,
+    privateKeyHex: privateKeyHex,
+  };
 }
 
 /**
@@ -63,8 +73,11 @@ async function addOrderlyKey(wallet, brokerId = BROKER_ID, chainId = CHAIN_ID) {
 
     // Generate ed25519 key pair
     console.log("Generating ed25519 key pair...");
-    const orderlyKey = await generateOrderlyKey();
+    const keyPair = await generateOrderlyKey();
+    const orderlyKey = keyPair.orderlyKey;
+    const orderlyPrivateKeyHex = keyPair.privateKeyHex;
     console.log(`Generated Orderly Key: ${orderlyKey}`);
+    console.log(`Generated Orderly Private Key: ${orderlyPrivateKeyHex}`);
 
     // Set defaults for scope and expiration
     const scope = "read,trading";
@@ -143,11 +156,53 @@ async function addOrderlyKey(wallet, brokerId = BROKER_ID, chainId = CHAIN_ID) {
     console.log("Orderly Key added successfully!");
     console.log("Response:", JSON.stringify(data, null, 2));
 
+    // Save Orderly Key and Private Key to .env file
+    const envPath = path.join(process.cwd(), ".env");
+    let envContent = "";
+
+    // Read existing .env file if it exists
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, "utf8");
+    }
+
+    // Check if ORDERLY_KEY already exists in .env
+    const hasOrderlyKey = /^ORDERLY_KEY=/.test(envContent);
+    const hasOrderlyPrivateKey = /^ORDERLY_PRIVATE_KEY=/.test(envContent);
+
+    // Update or append ORDERLY_KEY
+    if (hasOrderlyKey) {
+      envContent = envContent.replace(
+        /^ORDERLY_KEY=.*$/m,
+        `ORDERLY_KEY=${orderlyKey}`
+      );
+    } else {
+      envContent +=
+        (envContent && !envContent.endsWith("\n") ? "\n" : "") +
+        `ORDERLY_KEY=${orderlyKey}\n`;
+    }
+
+    // Update or append ORDERLY_PRIVATE_KEY
+    if (hasOrderlyPrivateKey) {
+      envContent = envContent.replace(
+        /^ORDERLY_PRIVATE_KEY=.*$/m,
+        `ORDERLY_PRIVATE_KEY=${orderlyPrivateKeyHex}`
+      );
+    } else {
+      envContent += `ORDERLY_PRIVATE_KEY=${orderlyPrivateKeyHex}\n`;
+    }
+
+    // Write back to .env file
+    fs.writeFileSync(envPath, envContent, "utf8");
+    console.log("\n✅ Saved to .env file:");
+    console.log(`   ORDERLY_KEY=${orderlyKey}`);
+    console.log(`   ORDERLY_PRIVATE_KEY=${orderlyPrivateKeyHex}`);
+
     return {
       success: true,
       data: data,
       userAddress: userAddress,
       orderlyKey: orderlyKey,
+      orderlyPrivateKeyHex: orderlyPrivateKeyHex,
     };
   } catch (error) {
     console.error("Error adding Orderly Key:", error);
