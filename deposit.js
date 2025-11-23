@@ -233,6 +233,24 @@ async function depositUSDC(
       console.log(`Approval transaction hash: ${approveTx.hash}`);
       await approveTx.wait();
       console.log("Approval confirmed");
+
+      // Verify allowance updated (poll up to 10 times with 1s delay)
+      for (let i = 0; i < 10; i++) {
+        const verifiedAllowance = await usdcContract.allowance(
+          userAddress,
+          vaultAddress
+        );
+        if (verifiedAllowance >= amountWei) break;
+        if (i === 9) {
+          throw new Error(
+            `Allowance verification failed. Expected: ${ethers.formatUnits(
+              amountWei,
+              decimals
+            )}, Got: ${ethers.formatUnits(verifiedAllowance, decimals)}`
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
     }
 
     // Step 8: Prepare deposit data

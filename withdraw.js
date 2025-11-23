@@ -315,6 +315,15 @@ async function main() {
     process.exit(1);
   }
 
+  // Validate minimum withdrawal amount
+  const amountNum = parseFloat(amount);
+  if (isNaN(amountNum) || amountNum < 1.001) {
+    console.error(
+      `Error: Withdrawal amount must be at least 1.001. Got: ${amount}`
+    );
+    process.exit(1);
+  }
+
   // Create wallet from private key
   const wallet = new ethers.Wallet(privateKey);
 
